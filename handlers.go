@@ -8,18 +8,6 @@ import (
 	"strings"
 )
 
-// For setting Cache-Control and Surrogate-Control headers.
-const (
-	maxAge10    = "max-age=10"
-	maxAge86400 = "max-age=86400"
-)
-
-// These constants are for error and other pages.
-const (
-	errContent  = "text/plain; charset=utf-8"
-	htmlContent = "text/html; charset=utf-8"
-)
-
 var compressibleMimes = map[string]bool{
 	// Compressible types from https://www.fastly.com/blog/new-gzip-settings-and-deciding-what-compress
 	"text/html":                     true,
@@ -46,6 +34,14 @@ var compressibleMimes = map[string]bool{
 	"text/csv":                 true,
 }
 
+var surrogateControl = map[int]string{
+	http.StatusNotFound:            "max-age=10",
+	http.StatusServiceUnavailable:  "max-age=10",
+	http.StatusInternalServerError: "max-age=10",
+	http.StatusBadRequest:          "max-age=86400",
+	http.StatusMethodNotAllowed:    "max-age=86400",
+}
+
 /*
 MakeHandler executes f and writes the response to the client.
 
@@ -56,7 +52,7 @@ func MakeHandler(f RequestHandler) http.HandlerFunc {
 		var b bytes.Buffer
 
 		w.Header().Set("Vary", "Accept")
-		w.Header().Set("Surrogate-Control", maxAge10)
+		w.Header().Set("Surrogate-Control", "max-age=10")
 
 		// TODO add mtr monitoring
 		res := f(r, w.Header(), &b)
@@ -91,7 +87,7 @@ func Write(w http.ResponseWriter, r *http.Request, res *Result, b *bytes.Buffer)
 
 		switch w.Header().Get("Weft-Error") {
 		case "page":
-			w.Header().Set("Content-Type", htmlContent)
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			if b != nil && b.Len() == 0 {
 				if e, ok := errorPages[res.Code]; ok {
 					b.Write(e)
@@ -101,26 +97,17 @@ func Write(w http.ResponseWriter, r *http.Request, res *Result, b *bytes.Buffer)
 				}
 			}
 		case "msg", "":
-			w.Header().Set("Content-Type", errContent)
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 
 			if b != nil && b.Len() == 0 {
 				b.WriteString(res.Msg)
 			}
 		}
 
-		switch res.Code {
-		case http.StatusNotFound:
-			w.Header().Set("Surrogate-Control", maxAge10)
-		case http.StatusServiceUnavailable:
-			w.Header().Set("Surrogate-Control", maxAge10)
-		case http.StatusInternalServerError:
-			w.Header().Set("Surrogate-Control", maxAge10)
-		case http.StatusBadRequest:
-			w.Header().Set("Surrogate-Control", maxAge86400)
-		case http.StatusMethodNotAllowed:
-			w.Header().Set("Surrogate-Control", maxAge86400)
-		default:
-			w.Header().Set("Surrogate-Control", maxAge10)
+		if s, ok := surrogateControl[res.Code]; ok {
+			w.Header().Set("Surrogate-Control", s)
+		} else {
+			w.Header().Set("Surrogate-Control", "max-age=10")
 		}
 	}
 
