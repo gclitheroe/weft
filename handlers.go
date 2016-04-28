@@ -50,7 +50,7 @@ var compressibleMimes = map[string]bool{
 MakeHandler executes f and writes the response to the client.
 
 May not be suitable for middleware chaining.
- */
+*/
 func MakeHandler(f RequestHandler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var b bytes.Buffer
@@ -80,7 +80,7 @@ checked.  When it is 'page' an html page is written to the client.
  When it is 'msg' (or empty) then res.Msg is written to the client.
 
 Weft-Error is removed from the header before writing to the client.
- */
+*/
 func Write(w http.ResponseWriter, r *http.Request, res *Result, b *bytes.Buffer) {
 	if res.Code == 0 {
 		res.Code = http.StatusOK
@@ -91,7 +91,15 @@ func Write(w http.ResponseWriter, r *http.Request, res *Result, b *bytes.Buffer)
 
 		switch w.Header().Get("Weft-Error") {
 		case "page":
-		//	 TODO error pages for web apps
+			w.Header().Set("Content-Type", htmlContent)
+			if b != nil && b.Len() == 0 {
+				if e, ok := errorPages[res.Code]; ok {
+					b.Write(e)
+				} else {
+					e, _ := errorPages[http.StatusInternalServerError]
+					b.Write(e)
+				}
+			}
 		case "msg", "":
 			w.Header().Set("Content-Type", errContent)
 
