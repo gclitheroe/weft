@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// Return pointers to these as required.  Don't modify them.
+// Return pointers to these as required.
 var (
 	StatusOK         = Result{Ok: true, Code: http.StatusOK, Msg: ""}
 	MethodNotAllowed = Result{Ok: false, Code: http.StatusMethodNotAllowed, Msg: "method not allowed"}
@@ -18,8 +18,8 @@ var (
 )
 
 type Result struct {
-	Ok   bool   // set true to indicated success
-	Code int    // http status code for writing back the client e.g., http.StatusOK for success.
+	Ok   bool   // set true to indicate success
+	Code int    // http status code for writing back to the client e.g., http.StatusOK for success.
 	Msg  string // any error message for logging or to send to the client.
 }
 

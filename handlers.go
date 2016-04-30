@@ -44,15 +44,10 @@ var surrogateControl = map[int]string{
 
 /*
 MakeHandler executes f and writes the response to the client.
-
-May not be suitable for middleware chaining.
 */
 func MakeHandler(f RequestHandler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var b bytes.Buffer
-
-		w.Header().Set("Vary", "Accept")
-		w.Header().Set("Surrogate-Control", "max-age=10")
 
 		// TODO add mtr monitoring
 		res := f(r, w.Header(), &b)
@@ -67,39 +62,41 @@ and the content.  Appropriate response headers are set.  Surrogate-Control heade
 also set for intermediate caches.  Changes made to Surrogate-Control made before
 calling Write will be respected for res.Code == 200 and overwritten for other Codes.
 
-If b is non nil and non zero length then it's contents are always written to w.
-
 If b is nil then only headers are written to w.
 
 In the case of res.Code being for an error and b non nil then header "Weft-Error" is
-checked.  When it is 'page' an html page is written to the client.
- When it is 'msg' (or empty) then res.Msg is written to the client.
+checked.  When it is 'page' an html page is written to the client.  When
+it is 'msg' (or empty) then res.Msg is written to the client.
 
 Weft-Error is removed from the header before writing to the client.
 */
 func Write(w http.ResponseWriter, r *http.Request, res *Result, b *bytes.Buffer) {
 	if res.Code == 0 {
 		res.Code = http.StatusOK
-		log.Printf("ERROR: weft - received Result.Code == 0, serving 200.")
+		log.Printf("WARN: weft - received Result.Code == 0, serving 200.")
+	}
+
+	if w.Header().Get("Surrogate-Control") == "" {
+		w.Header().Set("Surrogate-Control", "max-age=10")
 	}
 
 	if res.Code != 200 {
-
-		switch w.Header().Get("Weft-Error") {
+		switch r.Header.Get("Weft-Error") {
 		case "page":
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			if b != nil && b.Len() == 0 {
+			if b != nil {
+				b.Reset()
 				if e, ok := errorPages[res.Code]; ok {
 					b.Write(e)
 				} else {
-					e, _ := errorPages[http.StatusInternalServerError]
-					b.Write(e)
+					b.Write(errorPages[http.StatusInternalServerError])
 				}
 			}
 		case "msg", "":
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 
-			if b != nil && b.Len() == 0 {
+			if b != nil {
+				b.Reset()
 				b.WriteString(res.Msg)
 			}
 		}
@@ -113,8 +110,11 @@ func Write(w http.ResponseWriter, r *http.Request, res *Result, b *bytes.Buffer)
 
 	w.Header().Del("Weft-Error")
 
-	// write the response.  With gzipping if possible.
-	if w.Header().Get("Content-Type") == "" {
+	/*
+	 write the response.  With gzipping if possible.
+	*/
+
+	if w.Header().Get("Content-Type") == "" && b != nil {
 		w.Header().Set("Content-Type", http.DetectContentType(b.Bytes()))
 	}
 
@@ -135,11 +135,13 @@ func Write(w http.ResponseWriter, r *http.Request, res *Result, b *bytes.Buffer)
 			defer gz.Close()
 			w.WriteHeader(res.Code)
 			b.WriteTo(gz)
+
+			return
 		}
-	} else {
-		w.WriteHeader(res.Code)
-		if b != nil {
-			b.WriteTo(w)
-		}
+	}
+
+	w.WriteHeader(res.Code)
+	if b != nil {
+		b.WriteTo(w)
 	}
 }
