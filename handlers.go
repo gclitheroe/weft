@@ -114,6 +114,8 @@ func Write(w http.ResponseWriter, r *http.Request, res *Result, b *bytes.Buffer)
 	 write the response.  With gzipping if possible.
 	*/
 
+	w.Header().Add("Vary", "Accept-Encoding")
+
 	if w.Header().Get("Content-Type") == "" && b != nil {
 		w.Header().Set("Content-Type", http.DetectContentType(b.Bytes()))
 	}
