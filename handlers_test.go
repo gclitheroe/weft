@@ -208,7 +208,6 @@ func TestErrorResponses(t *testing.T) {
 	Write(w, r, &res, &b)
 	checkResponse(t, w, res.Code, "max-age=10", "", "non empty")
 
-
 	w = httptest.NewRecorder()
 	res.Code = http.StatusNotFound
 	Write(w, r, &res, &b)
@@ -238,6 +237,35 @@ func TestErrorResponses(t *testing.T) {
 	res.Code = 999
 	Write(w, r, &res, &b)
 	checkResponse(t, w, 999, "max-age=10", "", err503)
+}
+
+func BenchmarkMakeHandler(b *testing.B) {
+	var w *httptest.ResponseRecorder
+
+	r, err := http.NewRequest("GET", "http://test.com", nil)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	h := func(r *http.Request, h http.Header, b *bytes.Buffer) *Result {
+		b.WriteString("bogan impsum bogan impsum")
+		b.WriteString("bogan impsum bogan impsum")
+		b.WriteString("bogan impsum bogan impsum")
+		b.WriteString("bogan impsum bogan impsum")
+		b.WriteString("bogan impsum bogan impsum")
+		b.WriteString("bogan impsum bogan impsum")
+		b.WriteString("bogan impsum bogan impsum")
+		b.WriteString("bogan impsum bogan impsum")
+
+		return &StatusOK
+	}
+
+	fm := MakeHandler(h)
+
+	for n := 0; n < b.N; n++ {
+		w = httptest.NewRecorder()
+		fm.ServeHTTP(w, r)
+	}
 }
 
 func checkResponse(t *testing.T, w *httptest.ResponseRecorder, code int, surrogate, encoding, body string) {
